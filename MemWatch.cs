@@ -264,7 +264,7 @@ namespace MemWatch
 
         // Scans installed kernel drivers for the largest tags (same idea as "findstr /m tag *.sys"),
         // splits each tag's bytes among the third-party drivers that contain it, and returns the
-        // third-party driver holding the most, e.g. "Contoso (contoso.sys)". Null if none stands out.
+        // third-party driver holding the most, e.g. "Bitdefender (atc.sys)". Null if none stands out.
         public static string FindCause(List<Tag> all, out string detail)
         {
             List<Tag> top = all.Where(t => t.NonPaged > 0).OrderByDescending(t => t.NonPaged).Take(15).ToList();
@@ -358,7 +358,7 @@ namespace MemWatch
                 if (c.Length == 0) c = (vi.FileDescription ?? "").Trim();
             }
             catch { }
-            // "Contoso Ltd. Redmond, WA" -> "Contoso"
+            // "Bitdefender S.R.L. Bucharest, ROMANIA" -> "Bitdefender"
             foreach (string cut in new[] { ",", " S.R.L", " SRL", " Inc", " LLC", " Ltd", " Corporation", " Corp", " GmbH", " B.V", " AG" })
             {
                 int at = c.IndexOf(cut, StringComparison.OrdinalIgnoreCase);
@@ -1465,6 +1465,7 @@ namespace MemWatch
         ToolStripButton btnPause, btnNotify;
         NumericUpDown numRefresh;
         NotifyIcon tray;
+        bool reallyExit;   // true only when the user picks Exit from the tray menu
         IntPtr hIconOk, hIconAlert;
         Icon iconOk, iconAlert;
 
@@ -1542,7 +1543,18 @@ namespace MemWatch
                 timer.Start();
             };
             Resize += (s, e) => { if (WindowState == FormWindowState.Minimized) { Hide(); } };
-            FormClosing += (s, e) => Shutdown();
+            FormClosing += (s, e) =>
+            {
+                // Pressing X (or Alt+F4) hides to the system tray instead of quitting.
+                // Only an explicit tray "Exit" (reallyExit) actually shuts down.
+                if (e.CloseReason == CloseReason.UserClosing && !reallyExit)
+                {
+                    e.Cancel = true;
+                    Hide();
+                    return;
+                }
+                Shutdown();
+            };
         }
 
         int S(int px) { return (int)(px * dpi); }
@@ -2164,7 +2176,7 @@ namespace MemWatch
             menu.Opening += (s, e) => { notify.Text = "Pop-up alerts: " + (btnNotify.Checked ? "On" : "Off") + "  (click to turn " + (btnNotify.Checked ? "off)" : "on)"); };
             menu.Items.Add(notify);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit", null, (s, e) => Close());
+            menu.Items.Add("Exit", null, (s, e) => { reallyExit = true; Close(); });
             tray = new NotifyIcon { Icon = iconOk, Text = "MemWatch", Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ShowFromTray(); };
             tray.BalloonTipClicked += (s, e) => ShowFromTray();
